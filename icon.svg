@@ -6,5 +6,5 @@
 <rect x="92" y="216" width="94" height="94" rx="18" fill="#38d996"/>
 <rect x="210" y="216" width="94" height="94" rx="18" fill="#fff"/>
 <rect x="328" y="216" width="94" height="94" rx="18" fill="#38d996"/>
-<path d="M102 390h62l30-48 40 28 48-72 42 34 80-102" fill="none" stroke="#61a7ff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+<path d="M102 390h62l30-48 40 28 48-72 42 34 80-102" fill="none" stroke="#61a7ff"
+ stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/></svg>
