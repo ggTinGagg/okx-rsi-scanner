@@ -1,0 +1,17 @@
+{
+  "name": "OKX RSI 15m Scanner",
+  "short_name": "OKX RSI",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070b13",
+  "theme_color": "#090d18",
+  "description": "Quét RSI cho 30 hợp đồng OKX USDT perpetual có khối lượng lớn.",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

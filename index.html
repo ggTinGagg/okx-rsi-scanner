@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#090d18" />
+  <meta name="description" content="Quét RSI 15 phút cho 30 hợp đồng OKX USDT perpetual có khối lượng lớn." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>OKX RSI 15m Scanner</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#070b13; --panel:#0e1524; --panel2:#111b2e; --line:#22304a;
+      --text:#f3f6fb; --muted:#94a3b8; --green:#38d996; --red:#ff647c;
+      --amber:#ffc857; --blue:#61a7ff; --shadow:0 14px 40px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:
+      radial-gradient(circle at 20% -10%,rgba(50,110,255,.22),transparent 35%),
+      radial-gradient(circle at 100% 10%,rgba(56,217,150,.10),transparent 28%),
+      var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .wrap{max-width:940px;margin:auto;padding:18px 14px 48px}
+    header{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+    h1{font-size:23px;margin:0 0 4px;letter-spacing:-.4px}
+    .sub{color:var(--muted);font-size:13px}
+    .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(56,217,150,.1);border:1px solid rgba(56,217,150,.3);
+      color:#8bf1c3;padding:7px 10px;border-radius:999px;font-size:12px;white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(56,217,150,.12)}
+    .card{background:linear-gradient(180deg,rgba(17,27,46,.96),rgba(11,18,31,.96));border:1px solid var(--line);
+      border-radius:18px;box-shadow:var(--shadow)}
+    .controls{padding:13px;display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:13px}
+    .filters{display:flex;gap:8px;flex-wrap:wrap}
+    button,select,input{font:inherit}
+    button,.chip{border:1px solid var(--line);background:#111b2e;color:var(--text);padding:10px 13px;border-radius:12px;cursor:pointer}
+    button:active{transform:translateY(1px)}
+    .chip.active{background:#1b3155;border-color:#3f73b8;color:#dcecff}
+    .refresh{background:linear-gradient(135deg,#3478f6,#2458c8);border:0;font-weight:700}
+    .refresh:disabled{opacity:.55;cursor:not-allowed}
+    .settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:0 13px 13px}
+    label{color:var(--muted);font-size:12px}
+    label span{display:block;margin:0 0 5px}
+    input,select{width:100%;background:#0a1120;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px}
+    .status{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:13px 0}
+    .stat{padding:14px}.stat b{font-size:24px;display:block}.stat small{color:var(--muted)}
+    .table-card{overflow:hidden}
+    .table-head{padding:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}
+    .table-head h2{font-size:16px;margin:0}.hint{font-size:12px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:12px 13px;text-align:left;border-bottom:1px solid rgba(34,48,74,.65)}
+    th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+    tr:last-child td{border-bottom:0}
+    .coin{font-weight:750}.inst{color:var(--muted);font-size:11px;margin-top:2px}
+    .rsi{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+    .hot{color:var(--red)}.cold{color:var(--green)}.neutral{color:var(--amber)}
+    .tag{display:inline-block;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:700}
+    .tag.hot{background:rgba(255,100,124,.12)}.tag.cold{background:rgba(56,217,150,.12)}
+    .tag.neutral{background:rgba(255,200,87,.12)}
+    .price,.vol{font-variant-numeric:tabular-nums}
+    a{color:var(--blue);text-decoration:none}
+    .empty{padding:36px 18px;text-align:center;color:var(--muted)}
+    .error{margin:13px 0;padding:13px;border-radius:13px;background:rgba(255,100,124,.10);border:1px solid rgba(255,100,124,.32);color:#ffc1ca;display:none}
+    footer{color:var(--muted);font-size:11px;margin-top:15px;text-align:center}
+    .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;
+      animation:spin .75s linear infinite;vertical-align:-2px;margin-right:6px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:650px){
+      .wrap{padding:14px 10px 38px} header{align-items:center} h1{font-size:20px}
+      .controls{grid-template-columns:1fr}.refresh{width:100%}
+      .settings{grid-template-columns:1fr 1fr}.settings label:last-child{grid-column:1/-1}
+      .summary{gap:7px}.stat{padding:11px}.stat b{font-size:20px}
+      th:nth-child(4),td:nth-child(4){display:none}
+      th,td{padding:11px 9px}.hint{display:none}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>OKX RSI Scanner</h1>
+      <div class="sub">30 hợp đồng USDT perpetual lớn nhất • RSI Wilder</div>
+    </div>
+    <div class="badge"><span class="dot"></span> Dữ liệu công khai</div>
+  </header>
+
+  <section class="card">
+    <div class="controls">
+      <div class="filters">
+        <button class="chip active" data-filter="over">RSI &gt; ngưỡng</button>
+        <button class="chip" data-filter="under">RSI &lt; 30</button>
+        <button class="chip" data-filter="all">Tất cả 30 coin</button>
+      </div>
+      <button id="refreshBtn" class="refresh">↻ Quét ngay</button>
+    </div>
+    <div class="settings">
+      <label><span>Khung nến</span><select id="bar"><option value="15m" selected>15 phút</option><option value="5m">5 phút</option><option value="30m">30 phút</option><option value="1H">1 giờ</option></select></label>
+      <label><span>Ngưỡng quá mua</span><input id="threshold" type="number" min="50" max="95" value="70"></label>
+      <label><span>Tự làm mới</span><select id="interval"><option value="0">Tắt</option><option value="60" selected>60 giây</option><option value="120">2 phút</option><option value="300">5 phút</option></select></label>
+    </div>
+    <div class="status">
+      <span id="statusText">Sẵn sàng quét.</span>
+      <span id="updatedAt">Chưa cập nhật</span>
+    </div>
+  </section>
+
+  <div id="errorBox" class="error"></div>
+
+  <section class="summary">
+    <div class="card stat"><b id="countOver">–</b><small>RSI quá mua</small></div>
+    <div class="card stat"><b id="countUnder">–</b><small>RSI quá bán</small></div>
+    <div class="card stat"><b id="countDone">–</b><small>Coin đã quét</small></div>
+  </section>
+
+  <section class="card table-card">
+    <div class="table-head"><h2 id="tableTitle">Coin có RSI trên ngưỡng</h2><span class="hint">Chạm tên coin để mở TradingView</span></div>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>Coin</th><th>RSI</th><th>Giá</th><th>KL 24h ước tính</th><th>Trạng thái</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" class="empty">Nhấn “Quét ngay” để bắt đầu.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Chỉ là công cụ thống kê kỹ thuật, không phải khuyến nghị đầu tư. RSI được tính từ các nến đã xác nhận.</footer>
+</div>
+
+<script>
+const API = 'https://www.okx.com/api/v5';
+const $ = s => document.querySelector(s);
+let allRows = [], activeFilter = 'over', timer = null;
+
+function fmtPrice(n){
+  if(!Number.isFinite(n)) return '–';
+  if(n >= 1000) return n.toLocaleString('en-US',{maximumFractionDigits:2});
+  if(n >= 1) return n.toLocaleString('en-US',{maximumFractionDigits:4});
+  return n.toLocaleString('en-US',{maximumSignificantDigits:6});
+}
+function fmtMoney(n){
+  if(!Number.isFinite(n)) return '–';
+  if(n>=1e9) return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6) return (n/1e6).toFixed(1)+'M';
+  if(n>=1e3) return (n/1e3).toFixed(1)+'K';
+  return n.toFixed(0);
+}
+function symbolForTV(instId){ return instId.replace('-USDT-SWAP','USDT.P').replaceAll('-',''); }
+function coinName(instId){ return instId.replace('-USDT-SWAP',''); }
+
+function rsiWilder(closes, period=14){
+  if(closes.length < period + 1) return null;
+  let gain=0, loss=0;
+  for(let i=1;i<=period;i++){
+    const d=closes[i]-closes[i-1];
+    gain += Math.max(d,0); loss += Math.max(-d,0);
+  }
+  let avgGain=gain/period, avgLoss=loss/period;
+  for(let i=period+1;i<closes.length;i++){
+    const d=closes[i]-closes[i-1];
+    avgGain=(avgGain*(period-1)+Math.max(d,0))/period;
+    avgLoss=(avgLoss*(period-1)+Math.max(-d,0))/period;
+  }
+  if(avgLoss===0) return 100;
+  const rs=avgGain/avgLoss;
+  return 100-(100/(1+rs));
+}
+
+async function fetchJSON(url, timeout=12000){
+  const ctrl=new AbortController();
+  const id=setTimeout(()=>ctrl.abort(),timeout);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal,cache:'no-store'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    if(j.code !== '0') throw new Error(j.msg || `Mã lỗi OKX ${j.code}`);
+    return j.data;
+  } finally { clearTimeout(id); }
+}
+async function getTop30(){
+  const data=await fetchJSON(`${API}/market/tickers?instType=SWAP`);
+  return data
+    .filter(x=>x.instId.endsWith('-USDT-SWAP') && Number(x.last)>0)
+    .map(x=>{
+      const last=Number(x.last), baseVol=Number(x.volCcy24h || 0);
+      return {...x, quoteVolEstimate: last*baseVol};
+    })
+    .sort((a,b)=>b.quoteVolEstimate-a.quoteVolEstimate)
+    .slice(0,30);
+}
+async function getRSI(ticker, bar){
+  const candles=await fetchJSON(`${API}/market/candles?instId=${encodeURIComponent(ticker.instId)}&bar=${encodeURIComponent(bar)}&limit=100`);
+  const confirmed=candles.filter(c=>String(c[8])==='1').reverse();
+  const closes=confirmed.map(c=>Number(c[4])).filter(Number.isFinite);
+  return {...ticker, rsi:rsiWilder(closes,14), candles:closes.length};
+}
+async function batched(items, batchSize, task){
+  const results=[];
+  for(let i=0;i<items.length;i+=batchSize){
+    const chunk=items.slice(i,i+batchSize);
+    const settled=await Promise.allSettled(chunk.map(task));
+    for(const r of settled) if(r.status==='fulfilled') results.push(r.value);
+    $('#statusText').textContent=`Đang quét ${Math.min(i+batchSize,items.length)}/${items.length} coin…`;
+    if(i+batchSize<items.length) await new Promise(r=>setTimeout(r,450));
+  }
+  return results;
+}
+function stateFor(rsi, threshold){
+  if(rsi>threshold) return ['Quá mua','hot'];
+  if(rsi<30) return ['Quá bán','cold'];
+  return ['Trung tính','neutral'];
+}
+function render(){
+  const threshold=Number($('#threshold').value)||70;
+  let rows=[...allRows];
+  if(activeFilter==='over') rows=rows.filter(x=>x.rsi>threshold);
+  else if(activeFilter==='under') rows=rows.filter(x=>x.rsi<30);
+  rows.sort((a,b)=> activeFilter==='under' ? a.rsi-b.rsi : b.rsi-a.rsi);
+
+  $('#tableTitle').textContent=activeFilter==='over' ? `Coin có RSI > ${threshold}` :
+    activeFilter==='under' ? 'Coin có RSI < 30' : 'Toàn bộ 30 coin';
+  $('#countOver').textContent=allRows.filter(x=>x.rsi>threshold).length;
+  $('#countUnder').textContent=allRows.filter(x=>x.rsi<30).length;
+  $('#countDone').textContent=allRows.length;
+
+  if(!rows.length){
+    $('#rows').innerHTML=`<tr><td colspan="5" class="empty">Hiện chưa có coin nào thỏa điều kiện.</td></tr>`;
+    return;
+  }
+  $('#rows').innerHTML=rows.map(x=>{
+    const [label,klass]=stateFor(x.rsi,threshold);
+    const tv=`https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(symbolForTV(x.instId))}`;
+    return `<tr>
+      <td><a href="${tv}" target="_blank" rel="noopener"><div class="coin">${coinName(x.instId)}USDT.P</div><div class="inst">${x.instId}</div></a></td>
+      <td class="rsi ${klass}">${x.rsi.toFixed(1)}</td>
+      <td class="price">${fmtPrice(Number(x.last))}</td>
+      <td class="vol">${fmtMoney(x.quoteVolEstimate)} USDT</td>
+      <td><span class="tag ${klass}">${label}</span></td>
+    </tr>`;
+  }).join('');
+}
+async function scan(){
+  const btn=$('#refreshBtn'), err=$('#errorBox');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Đang quét';
+  err.style.display='none';
+  $('#statusText').textContent='Đang lấy danh sách hợp đồng…';
+  try{
+    const top=await getTop30();
+    const bar=$('#bar').value;
+    allRows=await batched(top,6,t=>getRSI(t,bar));
+    allRows=allRows.filter(x=>Number.isFinite(x.rsi));
+    render();
+    const now=new Date();
+    $('#updatedAt').textContent='Cập nhật '+now.toLocaleTimeString('vi-VN');
+    $('#statusText').textContent=`Hoàn tất: ${allRows.length}/30 coin • ${bar}`;
+  }catch(e){
+    err.style.display='block';
+    err.innerHTML=`Không lấy được dữ liệu từ OKX: <b>${e.message}</b>.<br>
+      Hãy kiểm tra mạng, tắt trình chặn quảng cáo/VPN nếu có, rồi thử lại. Một số mạng có thể chặn yêu cầu trực tiếp tới API OKX.`;
+    $('#statusText').textContent='Quét thất bại.';
+  }finally{
+    btn.disabled=false; btn.textContent='↻ Quét lại';
+  }
+}
+function resetTimer(){
+  clearInterval(timer);
+  const sec=Number($('#interval').value);
+  if(sec>0) timer=setInterval(scan,sec*1000);
+}
+document.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); activeFilter=b.dataset.filter; render();
+}));
+$('#refreshBtn').addEventListener('click',scan);
+$('#threshold').addEventListener('change',render);
+$('#bar').addEventListener('change',scan);
+$('#interval').addEventListener('change',resetTimer);
+resetTimer();
+scan();
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+</script>
+</body>
+</html>
