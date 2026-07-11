@@ -1,8 +1,9 @@
-name: OKX RSI Telegram Alert
+name: OKX RSI Telegram Alert v4
 
 on:
   schedule:
-    - cron: "2,17,32,47 * * * *"
+    # Khoảng 1 phút sau khi nến 15 phút đóng: :01, :16, :31, :46 UTC.
+    - cron: "1,16,31,46 * * * *"
   workflow_dispatch:
     inputs:
       test_only:
@@ -15,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: okx-rsi-alert
+  group: okx-rsi-alert-v4
   cancel-in-progress: true
 
 jobs:
@@ -25,15 +26,13 @@ jobs:
     steps:
       - name: Lấy mã nguồn
         uses: actions/checkout@v4
-
       - name: Cài Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Quét RSI và gửi Telegram
+      - name: Quét nến 15 phút đã đóng
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TEST_ONLY: ${{ inputs.test_only }}
-        run: python rsi_alert.py 
+        run: python rsi_alert.py
