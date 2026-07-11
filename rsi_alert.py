@@ -10,39 +10,41 @@ RSI_PERIOD=14
 OVERBOUGHT=70.0
 OVERSOLD=30.0
 BAR="15m"
-TIMEOUT=20
+TIMEOUT=25
+
+def log(message:str)->None:
+    print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {message}", flush=True)
 
 def get_json(url:str):
-    req=urllib.request.Request(url,headers={"User-Agent":"OKX-RSI-Scanner/3.0"})
-    with urllib.request.urlopen(req,timeout=TIMEOUT) as r:
-        payload=json.loads(r.read().decode("utf-8"))
+    request=urllib.request.Request(url,headers={"User-Agent":"OKX-RSI-Scanner/4.0"})
+    with urllib.request.urlopen(request,timeout=TIMEOUT) as response:
+        payload=json.loads(response.read().decode("utf-8"))
     if payload.get("code")!="0":
         raise RuntimeError(payload.get("msg") or f"OKX error {payload.get('code')}")
     return payload["data"]
 
 def post_form(url:str,fields:dict[str,str]):
     data=urllib.parse.urlencode(fields).encode("utf-8")
-    req=urllib.request.Request(url,data=data,headers={"User-Agent":"OKX-RSI-Scanner/3.0"})
-    with urllib.request.urlopen(req,timeout=TIMEOUT) as r:
-        return json.loads(r.read().decode("utf-8"))
+    request=urllib.request.Request(url,data=data,headers={"User-Agent":"OKX-RSI-Scanner/4.0"})
+    with urllib.request.urlopen(request,timeout=TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 def rsi_series(closes:list[float],period:int=RSI_PERIOD):
     out=[None]*len(closes)
     if len(closes)<period+1:return out
     gain=loss=0.0
     for i in range(1,period+1):
-        d=closes[i]-closes[i-1]
-        gain+=max(d,0.0);loss+=max(-d,0.0)
+        delta=closes[i]-closes[i-1]
+        gain+=max(delta,0.0);loss+=max(-delta,0.0)
     avg_gain,avg_loss=gain/period,loss/period
     def calc():
         if avg_loss==0:return 100.0
-        rs=avg_gain/avg_loss
-        return 100.0-100.0/(1.0+rs)
+        return 100.0-100.0/(1.0+avg_gain/avg_loss)
     out[period]=calc()
     for i in range(period+1,len(closes)):
-        d=closes[i]-closes[i-1]
-        avg_gain=(avg_gain*(period-1)+max(d,0.0))/period
-        avg_loss=(avg_loss*(period-1)+max(-d,0.0))/period
+        delta=closes[i]-closes[i-1]
+        avg_gain=(avg_gain*(period-1)+max(delta,0.0))/period
+        avg_loss=(avg_loss*(period-1)+max(-delta,0.0))/period
         out[i]=calc()
     return out
 
@@ -50,89 +52,87 @@ def top_contracts():
     rows=get_json(f"{OKX_API}/market/tickers?instType=SWAP")
     ranked=[]
     for row in rows:
-        inst_id=str(row.get("instId",""))
-        if not inst_id.endswith("-USDT-SWAP"):continue
-        try:
-            last=float(row["last"]);base=float(row.get("volCcy24h") or 0)
-        except (KeyError,TypeError,ValueError):
-            continue
+        inst=str(row.get("instId",""))
+        if not inst.endswith("-USDT-SWAP"):continue
+        try:last=float(row["last"]);base=float(row.get("volCcy24h") or 0)
+        except (KeyError,TypeError,ValueError):continue
         if last<=0:continue
         row["quoteVolumeEstimate"]=last*base
         ranked.append(row)
     ranked.sort(key=lambda x:x["quoteVolumeEstimate"],reverse=True)
     return ranked[:TOP_N]
 
-def contract_signal(ticker:dict[str,Any]):
-    inst_id=ticker["instId"]
-    params=urllib.parse.urlencode({"instId":inst_id,"bar":BAR,"limit":"100"})
+def inspect_contract(ticker:dict[str,Any]):
+    inst=ticker["instId"]
+    params=urllib.parse.urlencode({"instId":inst,"bar":BAR,"limit":"100"})
     candles=get_json(f"{OKX_API}/market/candles?{params}")
-    confirmed=[row for row in candles if str(row[8])=="1"]
-    confirmed.reverse()
-    closes=[float(row[4]) for row in confirmed]
-    timestamps=[int(row[0]) for row in confirmed]
+    # Chỉ dùng nến đã xác nhận: confirm == 1. API trả nến mới nhất trước.
+    closed=[row for row in candles if str(row[8])=="1"]
+    closed.reverse()
+    closes=[float(row[4]) for row in closed]
     values=rsi_series(closes)
     valid=[(i,v) for i,v in enumerate(values) if v is not None]
     if len(valid)<2:return None
-    prev_i,prev_rsi=valid[-2];curr_i,curr_rsi=valid[-1]
+    prev_i,prev=valid[-2];curr_i,curr=valid[-1]
     direction=None
-    if prev_rsi<=OVERBOUGHT<curr_rsi:direction="up"
-    elif prev_rsi>=OVERSOLD>curr_rsi:direction="down"
-    if direction is None:return None
-    return {
-        "instId":inst_id,
-        "symbol":inst_id.replace("-USDT-SWAP","USDT.P").replace("-",""),
-        "direction":direction,
-        "previousRsi":prev_rsi,
-        "currentRsi":curr_rsi,
-        "price":closes[curr_i],
-        "candleTime":datetime.fromtimestamp(timestamps[curr_i]/1000,tz=timezone.utc),
-    }
-
-def fmt_price(v:float):
-    if v>=1000:return f"{v:,.2f}"
-    if v>=1:return f"{v:,.4f}".rstrip("0").rstrip(".")
-    return f"{v:.8f}".rstrip("0").rstrip(".")
+    if prev<=OVERBOUGHT<curr:direction="up"
+    elif prev>=OVERSOLD>curr:direction="down"
+    return {"inst":inst,"symbol":inst.replace("-USDT-SWAP","USDT.P").replace("-",""),
+            "previous":prev,"current":curr,"price":closes[curr_i],"direction":direction,
+            "closedTs":int(closed[curr_i][0])}
 
 def credentials():
-    token=os.getenv("TELEGRAM_BOT_TOKEN","").strip()
-    chat_id=os.getenv("TELEGRAM_CHAT_ID","").strip()
-    if not token or not chat_id:
-        raise RuntimeError("Thiếu TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID trong GitHub Secrets.")
-    return token,chat_id
+    token=os.getenv("TELEGRAM_BOT_TOKEN","").strip();chat=os.getenv("TELEGRAM_CHAT_ID","").strip()
+    if not token or not chat:raise RuntimeError("Thiếu Telegram Secrets")
+    return token,chat
 
 def send_telegram(text:str):
-    token,chat_id=credentials()
+    token,chat=credentials()
     result=post_form(f"https://api.telegram.org/bot{token}/sendMessage",{
-        "chat_id":chat_id,"text":text,"parse_mode":"HTML","disable_web_page_preview":"true"})
-    if not result.get("ok"):
-        raise RuntimeError(f"Telegram error: {result}")
+        "chat_id":chat,"text":text,"parse_mode":"HTML","disable_web_page_preview":"true"})
+    if not result.get("ok"):raise RuntimeError(f"Telegram error: {result}")
 
-def test_message():
-    now=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    send_telegram("✅ <b>OKX RSI Scanner 3.0 đã kết nối</b>\n\nBot sẽ quét top 50 hợp đồng USDT perpetual sau mỗi nến 15 phút đóng.\n• Báo khi RSI vừa cắt lên 70\n• Báo khi RSI vừa cắt xuống 30\n\nThời gian kiểm tra: <code>"+now+"</code>")
+def fmt_price(value:float):
+    if value>=1000:return f"{value:,.2f}"
+    if value>=1:return f"{value:,.4f}".rstrip("0").rstrip(".")
+    return f"{value:.8f}".rstrip("0").rstrip(".")
+
+def send_test():
+    send_telegram("✅ <b>OKX RSI Scanner 4.0 đã kết nối</b>\n\nLịch quét: khoảng 1 phút sau mỗi nến 15 phút đóng.\nBot chỉ dùng nến OKX đã xác nhận.")
 
 def main():
     if os.getenv("TEST_ONLY","").lower()=="true":
-        test_message();print("Telegram test sent.");return 0
-    tickers=top_contracts();signals=[]
-    for idx,ticker in enumerate(tickers,start=1):
+        send_test();log("Telegram test sent");return
+    log("Starting 15m closed-candle scan")
+    tickers=top_contracts();log(f"Loaded {len(tickers)} top USDT perpetual contracts")
+    inspected=[];signals=[]
+    for index,ticker in enumerate(tickers,1):
         try:
-            s=contract_signal(ticker)
-            if s:signals.append(s)
+            row=inspect_contract(ticker)
+            if row:
+                inspected.append(row)
+                if row["direction"]:signals.append(row)
         except Exception as exc:
-            print(f"Warning {ticker.get('instId')}: {exc}",file=sys.stderr)
-        if idx%8==0:time.sleep(.35)
+            log(f"WARNING {ticker.get('instId')}: {exc}")
+        if index%8==0:time.sleep(.35)
+    over=sum(1 for x in inspected if x["current"]>OVERBOUGHT)
+    under=sum(1 for x in inspected if x["current"]<OVERSOLD)
+    log(f"Scanned {len(inspected)}/{len(tickers)} contracts")
+    log(f"Current zones: RSI>70={over}, RSI<30={under}")
+    log(f"Fresh crossings: {len(signals)}")
     if not signals:
-        print(f"No RSI crossing signals among {len(tickers)} contracts.");return 0
-    signals.sort(key=lambda x:x["currentRsi"],reverse=True)
-    lines=["🔔 <b>OKX RSI 15m ALERT</b>",""]
-    for s in signals:
-        if s["direction"]=="up":icon,label="🔴","CẮT LÊN 70"
-        else:icon,label="🟢","CẮT XUỐNG 30"
-        lines.extend([f"{icon} <b>{html.escape(s['symbol'])}</b> — {label}",f"RSI: <code>{s['previousRsi']:.1f} → {s['currentRsi']:.1f}</code>",f"Giá: <code>{fmt_price(s['price'])}</code>",""])
-    lines.append("Dữ liệu lấy từ nến OKX đã đóng. Không phải khuyến nghị đầu tư.")
-    send_telegram("\n".join(lines))
-    print(f"Sent {len(signals)} signal(s).");return 0
+        log("No Telegram alert needed");return
+    lines=["🔔 <b>OKX RSI 15m — NẾN VỪA ĐÓNG</b>",""]
+    for signal in sorted(signals,key=lambda x:x["current"],reverse=True):
+        icon,label=("🔴","CẮT LÊN 70") if signal["direction"]=="up" else ("🟢","CẮT XUỐNG 30")
+        closed=datetime.fromtimestamp(signal["closedTs"]/1000,tz=timezone.utc).strftime("%H:%M UTC")
+        lines += [f"{icon} <b>{html.escape(signal['symbol'])}</b> — {label}",
+                  f"RSI: <code>{signal['previous']:.1f} → {signal['current']:.1f}</code>",
+                  f"Giá: <code>{fmt_price(signal['price'])}</code>",f"Nến: <code>{closed}</code>",""]
+    lines.append("Chỉ báo kỹ thuật, không phải khuyến nghị đầu tư.")
+    send_telegram("\n".join(lines));log(f"Telegram sent: {len(signals)} signal(s)")
 
 if __name__=="__main__":
-    raise SystemExit(main())
+    try:main()
+    except Exception as exc:
+        log(f"FATAL: {exc}");raise

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#090d18">
   <meta name="description" content="Quét RSI cho 50 hợp đồng OKX USDT perpetual có khối lượng lớn.">
   <link rel="manifest" href="manifest.webmanifest">
-  <title>OKX RSI Scanner 3.0</title>
+  <title>OKX RSI Scanner 4.0</title>
   <style>
     :root{color-scheme:dark;--bg:#070b13;--panel:#0e1524;--line:#22304a;--text:#f3f6fb;--muted:#94a3b8;--green:#38d996;--red:#ff647c;--amber:#ffc857;--blue:#61a7ff;--shadow:0 14px 40px rgba(0,0,0,.28)}
     *{box-sizing:border-box}
@@ -27,7 +27,7 @@
     label{color:var(--muted);font-size:12px}label span{display:block;margin:0 0 5px}
     input,select{width:100%;background:#0a1120;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px}
     .status{display:flex;justify-content:space-between;gap:10px;padding:11px 14px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
-    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:13px 0}
+    .countdown{margin:13px 0;padding:13px 15px;display:flex;justify-content:space-between;align-items:center}.countdown b{font-size:20px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:13px 0}
     .stat{padding:14px}.stat b{font-size:24px;display:block}.stat small{color:var(--muted)}
     .table-card{overflow:hidden}.table-head{padding:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}.table-head h2{font-size:16px;margin:0}
     .hint{font-size:12px;color:var(--muted)}table{width:100%;border-collapse:collapse}
@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div><h1>OKX RSI Scanner 3.0</h1><div class="sub">Top 50 USDT perpetual • RSI Wilder 14</div></div>
+    <div><h1>OKX RSI Scanner 4.0</h1><div class="sub">Top 50 USDT perpetual • RSI Wilder 14</div></div>
     <div class="badge"><span class="dot"></span>Dữ liệu công khai</div>
   </header>
 
@@ -69,6 +69,8 @@
     <div class="status"><span id="statusText">Sẵn sàng quét.</span><span id="updatedAt">Chưa cập nhật</span></div>
   </section>
 
+  <section class="card countdown"><span>Lần đóng nến 15m tiếp theo</span><b id="countdown">--:--</b></section>
+
   <div id="errorBox" class="error"></div>
 
   <section class="summary">
@@ -85,7 +87,7 @@
     </table></div>
   </section>
 
-  <footer>Bot Telegram kiểm tra sau mỗi nến 15 phút đóng. Công cụ chỉ thống kê kỹ thuật, không phải khuyến nghị đầu tư.</footer>
+  <footer>Bot Telegram kiểm tra khoảng một phút sau mỗi nến 15 phút đóng. Công cụ chỉ thống kê kỹ thuật, không phải khuyến nghị đầu tư.</footer>
 </div>
 
 <script>
@@ -106,6 +108,7 @@ async function scan(){const btn=$('#refreshBtn'),err=$('#errorBox');btn.disabled
 function resetTimer(){clearInterval(timer);const s=Number($('#interval').value);if(s>0)timer=setInterval(scan,s*1000)}
 document.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));b.classList.add('active');activeFilter=b.dataset.filter;render()}));
 $('#refreshBtn').addEventListener('click',scan);$('#threshold').addEventListener('change',render);$('#bar').addEventListener('change',scan);$('#interval').addEventListener('change',resetTimer);resetTimer();scan();
+function tickCountdown(){const now=new Date(),next=new Date(now);next.setSeconds(0,0);next.setMinutes(Math.floor(now.getMinutes()/15)*15+15);const sec=Math.max(0,Math.floor((next-now)/1000));const el=document.querySelector('#countdown');if(el)el.textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}tickCountdown();setInterval(tickCountdown,1000);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
 </script>
 </body>
