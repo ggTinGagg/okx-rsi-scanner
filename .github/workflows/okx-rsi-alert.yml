@@ -1,25 +1,26 @@
-name: OKX RSI Telegram Alert v4.1 Stable
+name: OKX RSI Telegram Alert v4.1.1 Stable
 
 on:
   schedule:
     - cron: "*/5 * * * *"
+
   workflow_dispatch:
     inputs:
       mode:
         description: "Chế độ chạy thủ công"
         required: true
+        default: "test_telegram"
         type: choice
         options:
           - test_telegram
           - force_scan
-        default: test_telegram
 
 permissions:
   contents: read
   actions: write
 
 concurrency:
-  group: okx-rsi-alert-v4-1
+  group: okx-rsi-alert-v4-1-1
   cancel-in-progress: false
 
 jobs:
@@ -37,34 +38,36 @@ jobs:
           python-version: "3.12"
 
       - name: Kiểm tra Telegram
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'test_telegram'
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'test_telegram' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python rsi_alert.py --test
 
       - name: Lấy ID nến 15 phút mới nhất đã đóng
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'force_scan')
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'force_scan') }}
         id: candle
         shell: bash
         run: | CANDLE_ID="$(python rsi_alert.py --candle-id)" echo "id=$CANDLE_ID" >> "$GITHUB_OUTPUT" echo "Latest confirmed candle ID: $CANDLE_ID" 
       - name: Kiểm tra nến đã được xử lý chưa
-        if: github.event_name == 'schedule'
+        if: ${{ github.event_name == 'schedule' }}
         id: candle_cache
         uses: actions/cache@v4
         with:
           path: .okx-rsi-candle-state
-          key: okx-rsi-v4-1-${{ steps.candle.outputs.id }}
+          key: okx-rsi-v4-1-1-${{ steps.candle.outputs.id }}
 
       - name: Quét RSI
-        if: > (github.event_name == 'workflow_dispatch' && inputs.mode == 'force_scan') || (github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit != 'true')         env:
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'force_scan') || (github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit != 'true') }}
+        env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python rsi_alert.py
 
       - name: Đánh dấu nến đã xử lý
-        if: > success() && github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit != 'true'         shell: bash
+        if: ${{ success() && github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit != 'true' }}
+        shell: bash
         run: | mkdir -p .okx-rsi-candle-state echo "${{ steps.candle.outputs.id }}" > .okx-rsi-candle-state/last-candle.txt echo "Marked candle as processed." 
       - name: Bỏ qua vì nến đã xử lý
-        if: github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit == 'true'
-        run: echo "Nến 15 phút này đã được xử lý ở lần chạy trước. Không quét lại."
+        if: ${{ github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit == 'true' }}
+        run: | echo "Nến 15 phút này đã được xử lý ở lần chạy trước." echo "Không quét lại."
