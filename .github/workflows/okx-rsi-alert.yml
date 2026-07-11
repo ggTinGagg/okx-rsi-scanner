@@ -48,7 +48,11 @@ jobs:
         if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'force_scan') }}
         id: candle
         shell: bash
-        run: | CANDLE_ID="$(python rsi_alert.py --candle-id)" echo "id=$CANDLE_ID" >> "$GITHUB_OUTPUT" echo "Latest confirmed candle ID: $CANDLE_ID" 
+        run: |
+          CANDLE_ID="$(python rsi_alert.py --candle-id)"
+          echo "id=$CANDLE_ID" >> "$GITHUB_OUTPUT"
+          echo "Latest confirmed candle ID: $CANDLE_ID"
+
       - name: Kiểm tra nến đã được xử lý chưa
         if: ${{ github.event_name == 'schedule' }}
         id: candle_cache
@@ -67,7 +71,13 @@ jobs:
       - name: Đánh dấu nến đã xử lý
         if: ${{ success() && github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit != 'true' }}
         shell: bash
-        run: | mkdir -p .okx-rsi-candle-state echo "${{ steps.candle.outputs.id }}" > .okx-rsi-candle-state/last-candle.txt echo "Marked candle as processed." 
+        run: |
+          mkdir -p .okx-rsi-candle-state
+          echo "${{ steps.candle.outputs.id }}" > .okx-rsi-candle-state/last-candle.txt
+          echo "Marked candle as processed."
+
       - name: Bỏ qua vì nến đã xử lý
         if: ${{ github.event_name == 'schedule' && steps.candle_cache.outputs.cache-hit == 'true' }}
-        run: | echo "Nến 15 phút này đã được xử lý ở lần chạy trước." echo "Không quét lại."
+        run: |
+          echo "Nến 15 phút này đã được xử lý ở lần chạy trước."
+          echo "Không quét lại."
