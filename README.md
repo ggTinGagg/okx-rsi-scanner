@@ -1,19 +1,21 @@
-# OKX RSI Scanner v5.0 Web App
+# OKX RSI Scanner v5.0.1 Stable
+
+Bản sửa lỗi JavaScript của v5.0.
+
+## Đã sửa
+
+- Đổi tên hàm `top()` gây xung đột với `window.top` của trình duyệt.
+- Khai báo rõ hàm chọn nhiều phần tử thay vì tạo biến toàn cục.
+- Giữ nguyên toàn bộ giao diện và tính năng thông báo.
+- Cập nhật cache PWA để trình duyệt tải mã mới.
 
 ## Cập nhật GitHub Pages
-Tải đè 4 file sau vào repository hiện tại:
-- index.html
-- manifest.webmanifest
-- service-worker.js
-- icon.svg
 
-Sau đó Commit changes và đợi GitHub Pages cập nhật.
+Tải đè 4 file sau:
 
-## Dùng thông báo
-1. Mở trang bằng Chrome hoặc Edge.
-2. Nhấn Bật thông báo.
-3. Nhấn Kiểm tra thông báo.
-4. Trên Android có thể chọn Cài đặt ứng dụng hoặc Thêm vào màn hình chính.
+- `index.html`
+- `manifest.webmanifest`
+- `service-worker.js`
+- `icon.svg`
 
-## Giới hạn
-Thông báo chỉ hoạt động khi trang hoặc PWA vẫn đang mở, hoặc chưa bị hệ điều hành dừng chạy nền.
+Sau khi GitHub Pages deploy xong, mở trang và nhấn `Ctrl + F5` trên máy tính. Trên Android, đóng hẳn PWA/tab rồi mở lại; nếu vẫn thấy v5.0, xóa dữ liệu trang hoặc gỡ biểu tượng PWA cũ và cài lại.
