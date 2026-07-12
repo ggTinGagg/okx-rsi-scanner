@@ -1,8 +1,19 @@
-# OKX RSI Scanner v4.1.1 Stable
+# OKX RSI Scanner v5.0 Web App
 
-- Sửa lỗi YAML của v4.1.
-- Kiểm tra mỗi 5 phút.
-- Mỗi nến 15 phút chỉ xử lý một lần.
-- Chỉ dùng nến OKX đã xác nhận.
-- Quét top 50 hợp đồng USDT perpetual.
-- Báo RSI(14) cắt lên 70 hoặc cắt xuống 30.
+## Cập nhật GitHub Pages
+Tải đè 4 file sau vào repository hiện tại:
+- index.html
+- manifest.webmanifest
+- service-worker.js
+- icon.svg
+
+Sau đó Commit changes và đợi GitHub Pages cập nhật.
+
+## Dùng thông báo
+1. Mở trang bằng Chrome hoặc Edge.
+2. Nhấn Bật thông báo.
+3. Nhấn Kiểm tra thông báo.
+4. Trên Android có thể chọn Cài đặt ứng dụng hoặc Thêm vào màn hình chính.
+
+## Giới hạn
+Thông báo chỉ hoạt động khi trang hoặc PWA vẫn đang mở, hoặc chưa bị hệ điều hành dừng chạy nền.

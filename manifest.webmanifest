@@ -1,17 +1,10 @@
 {
-  "name": "OKX RSI Scanner 4.0",
+  "name": "OKX RSI Scanner v5.0",
   "short_name": "OKX RSI",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#070b13",
   "theme_color": "#090d18",
-  "description": "Quét RSI cho 50 hợp đồng OKX USDT perpetual.",
-  "icons": [
-    {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
+  "description": "Quét RSI 15 phút cho top 50 hợp đồng OKX USDT perpetual.",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
 }
