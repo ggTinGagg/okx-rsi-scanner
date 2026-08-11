@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090d18">
-<meta name="description" content="OKX RSI Scanner v5.0.3">
+<meta name="description" content="OKX RSI Scanner v5.0.4">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
-<title>OKX RSI Scanner v5.0.3</title>
+<title>OKX RSI Scanner v5.0.4</title>
 <style>
 :root{color-scheme:dark;--b:#070b13;--p:#101827;--l:#26344e;--t:#f4f7fb;--m:#94a3b8;--g:#38d996;--r:#ff647c;--a:#ffc857;--u:#61a7ff}
 *{box-sizing:border-box}
@@ -55,7 +55,7 @@ footer{text-align:center;color:var(--m);font-size:11px;margin-top:14px}
 <div class="w">
   <div class="head">
     <div>
-      <h1>OKX RSI Scanner v5.0.3</h1>
+      <h1>OKX RSI Scanner v5.0.4</h1>
       <div class="muted">Top 50 USDT perpetual • RSI Wilder 14 • Bước giá % + Chốt lời %</div>
     </div>
     <div class="badge">● Đang hoạt động</div>
@@ -132,7 +132,7 @@ footer{text-align:center;color:var(--m);font-size:11px;margin-top:14px}
   </section>
 
   <footer>
-    Bước giá (%) = 2 × thân nến (%) lớn nhất trong 10 nến hoàn tất ngay trước nến tín hiệu.
+    Bước giá (%) = 2 × thân nến (%) lớn nhất trong 10 nến hoàn tất, gồm 9 nến trước + chính nến tín hiệu.
     Thân nến (%) = |Close − Open| / Open × 100. Chốt lời (%) = 1/4 bước giá (%). Râu nến không được tính. Không phải khuyến nghị đầu tư.
   </footer>
 </div>
@@ -172,14 +172,15 @@ async function fetchTopContracts(){
 
 function calcStepAndTp(candles){
   // candles: oldest -> newest, only completed 15m candles.
-  // The latest completed candle is the signal candle, so use the 10 candles immediately before it.
+  // The latest completed candle is the signal candle.
+  // Use 10 candles total: 9 candles before the signal + the signal candle itself.
   // Body % = |Close - Open| / Open * 100. Wicks are ignored.
-  if(candles.length<11)return{stepPct:null,tpPct:null,maxBodyPct:null};
+  if(candles.length<10)return{stepPct:null,tpPct:null,maxBodyPct:null};
 
-  const previous10=candles.slice(-11,-1);
+  const signal10=candles.slice(-10);
   let maxBodyPct=0;
 
-  for(const x of previous10){
+  for(const x of signal10){
     const open=+x[1], close=+x[4];
     if(!Number.isFinite(open) || !Number.isFinite(close) || open<=0) continue;
 
@@ -380,7 +381,7 @@ $('#enable').onclick=async()=>{
 $('#test').onclick=async()=>{
   if(Notification.permission!=='granted')await $('#enable').onclick();
   if(Notification.permission==='granted'){
-    await notify('OKX RSI Scanner v5.0.3','Thông báo đang hoạt động bình thường.');
+    await notify('OKX RSI Scanner v5.0.4','Thông báo đang hoạt động bình thường.');
     tone($('#sound').value);vib($('#vibrate').value);
   }
 };
