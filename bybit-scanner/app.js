@@ -5,7 +5,7 @@ const formatTime=(n,full=false)=>new Date(n).toLocaleString('vi-VN',full?{day:'2
 // Round display only; retain the exact leverage for filtering and saved signals.
 const evenLeverage=n=>Math.max(2,Math.round(n/2)*2);
 const price=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:n>=100?2:n>=1?4:8});
-let stream=null,streamInterval='',streamPing=null,streamRetry=null,streamFailures=0,streamState='chưa kết nối',lastAutoClosed=null,lastStreamAttempt=0;
+let stream=null,streamInterval='',streamPing=null,streamRetry=null,streamFailures=0,streamState='chưa kết nối',lastAutoClosed=null,pendingStreamClose=null,streamCloseTimer=null,lastStreamAttempt=0,pageOpenedAt=Date.now(),scheduledCloseAt=null;
 let settings={...DEFAULTS},history=[],rows=[],busy=false,serverOffset=0,synced=false,timer=null,lastSettings='',audio=null,instruments=[],instrumentTime=0,requestTurn=Promise.resolve();
 try{const raw=JSON.parse(localStorage.getItem(STORE)||'{}');settings=validateSettings({...DEFAULTS,...raw.settings,period:14});history=(raw.history||[]).filter(x=>x&&typeof x.symbol==='string'&&Number.isFinite(x.rsi)&&Number.isFinite(x.closeTime)&&typeof x.id==='string').slice(0,1000);}catch{settings={...DEFAULTS};}
 const seen=new Set(history.map(x=>x.id));
@@ -47,7 +47,7 @@ function setBusy(value){busy=value;$('scan').disabled=value;$('scan').innerHTML=
 // The public stream supplies network events even when the background timer is delayed.
 // BTC provides a market-wide candle clock; each scan still ranks and analyzes all Top 50.
 function stopStream(){
- clearInterval(streamPing);clearTimeout(streamRetry);streamPing=null;streamRetry=null;
+ clearInterval(streamPing);clearTimeout(streamRetry);clearTimeout(streamCloseTimer);streamCloseTimer=null;pendingStreamClose=null;streamPing=null;streamRetry=null;
  const old=stream;stream=null;streamInterval='';if(old){old.onclose=null;old.close();}
  streamState=settings.auto?'chưa kết nối':'đã tắt';updateAlertState();
 }
@@ -65,19 +65,24 @@ function ensureStream(){
    if(data.success!==true){streamState='không đăng ký được; dùng lịch dự phòng';updateAlertState();ws.close();return;}
    streamState='đã kết nối';streamFailures=0;updateAlertState();
   }
-  if(data.topic!==`kline.${settings.interval}.BTCUSDT`)return;
-  if(!Array.isArray(data.data))return;
-  // Every real kline update checks the boundary, including the first tick after close.
-  // This avoids relying on a delayed timeout for the 2-second candle confirmation buffer.
-  if(!synced||busy)return;
-  const now=Date.now()+serverOffset,expected=latestClosedStart(now,settings.interval);
-  if(expected===lastAutoClosed||Date.now()-lastStreamAttempt<15000)return;
-  lastStreamAttempt=Date.now();scan('auto');
+  if(data.topic!==`kline.${settings.interval}.BTCUSDT`||!Array.isArray(data.data))return;
+  const ms=duration(settings.interval),now=Date.now()+serverOffset;
+  for(const candle of data.data){
+   const start=Number(candle.start),closeAt=start+ms,readyAt=closeAt+2000;
+   if(candle.confirm!==true||!Number.isFinite(start)||start%ms!==0||start<Math.floor(pageOpenedAt/ms)*ms||scheduledCloseAt===null||readyAt<scheduledCloseAt)continue;
+   pendingStreamClose=start;
+   clearTimeout(streamCloseTimer);
+   streamCloseTimer=setTimeout(checkStreamClose,Math.max(0,closeAt+2000-now));
+  }
+  // Further stream updates can release a pending close if a background timer was throttled.
+  checkStreamClose();
  };
+
  ws.onerror=()=>{if(stream===ws){streamState='kết nối gián đoạn; dùng lịch dự phòng';updateAlertState();ws.close();}};
  ws.onclose=()=>{if(stream!==ws)return;stream=null;clearInterval(streamPing);streamPing=null;streamState='đang kết nối lại; dùng lịch dự phòng';updateAlertState();if(settings.auto)streamRetry=setTimeout(ensureStream,Math.min(60000,10000*++streamFailures));};
 }
-function schedule(){clearTimeout(timer);if(!settings.auto||!synced)return;const now=Date.now()+serverOffset;const delay=Math.max(250,nextScanAt(now,settings.interval)-now);timer=setTimeout(()=>scan('auto'),delay);}
+function checkStreamClose(){if(!settings.auto||!synced||busy||pendingStreamClose===null||pendingStreamClose===lastAutoClosed)return;const readyAt=pendingStreamClose+duration(settings.interval)+2000;if(Date.now()+serverOffset<readyAt)return;const now=Date.now();if(now-lastStreamAttempt<15000)return;lastStreamAttempt=now;scan('auto');}
+function schedule(){clearTimeout(timer);scheduledCloseAt=null;if(!settings.auto||!synced)return;const now=Date.now()+serverOffset;scheduledCloseAt=nextScanAt(now,settings.interval);const delay=Math.max(250,scheduledCloseAt-now);timer=setTimeout(()=>scan('auto'),delay);}
 async function scan(source='manual'){
  if(busy)return;try{settings=readSettings();save();}catch(e){error(e.message);return;}
  const snapshot={...settings};setBusy(true);error('');$('progress-fill').style.width='0%';$('scan-status').textContent='Đồng bộ giờ Bybit và chọn Top 50…';
@@ -94,17 +99,18 @@ async function scan(source='manual'){
   if(failures.length)error(`Không lấy được ${failures.length} hợp đồng: ${failures.slice(0,8).map(x=>x.symbol).join(', ')}. Danh sách chỉ gồm các mã đã quét thành công; lịch sử đã lưu vẫn còn.`);
   await alertSignals(fresh);
  }catch(e){error(e.message+' Bấm Quét ngay để thử lại. Có thể mạng hoặc khu vực đang hạn chế Bybit.');document.body.classList.remove('connected');$('connection').textContent='Kết nối gián đoạn';$('scan-status').textContent='Quét chưa thành công; danh sách cũ (nếu có) chưa được cập nhật.';}
- finally{setBusy(false);ensureStream();if(!synced&&settings.auto){clearTimeout(timer);timer=setTimeout(()=>scan('auto'),30000);}else schedule();}
+ finally{setBusy(false);ensureStream();if(!synced&&settings.auto){clearTimeout(timer);timer=setTimeout(prepareAuto,30000);}else schedule();}
 }
-function applySettings(){try{settings=readSettings();save();error('');rows=[];render();$('signal-caption').textContent='Bộ lọc đã đổi. Bấm Quét ngay để cập nhật.';lastAutoClosed=null;lastStreamAttempt=0;ensureStream();schedule();}catch(e){error(e.message);}updateRule();}
+function applySettings(){try{settings=readSettings();save();error('');rows=[];render();$('signal-caption').textContent='Bộ lọc đã đổi. Bấm Quét ngay để cập nhật.';lastAutoClosed=null;pendingStreamClose=null;lastStreamAttempt=0;ensureStream();schedule();}catch(e){error(e.message);}updateRule();}
 $('settings').addEventListener('submit',e=>{e.preventDefault();unlockAudio();scan();});
 for(const k of ['interval','resetUpper','resetLower','maxLeverage','filterLeverage'])$(k).addEventListener('change',applySettings);
 for(const k of ['upper','lower'])$(k).addEventListener('change',()=>{const u=Number($('upper').value),l=Number($('lower').value);$('resetUpper').value=u-10;$('resetLower').value=l+10;applySettings();});
 document.querySelectorAll('[data-upper]').forEach(button=>button.addEventListener('click',()=>{$('upper').value=button.dataset.upper;$('lower').value=button.dataset.lower;$('resetUpper').value=Number(button.dataset.upper)-10;$('resetLower').value=Number(button.dataset.lower)+10;applySettings();}));
-$('auto').addEventListener('change',()=>{settings.auto=$('auto').checked;save();ensureStream();schedule();});$('sound').addEventListener('change',()=>{settings.sound=$('sound').checked;if(settings.sound)unlockAudio();save();updateAlertState();});
+$('auto').addEventListener('change',()=>{settings.auto=$('auto').checked;save();if(settings.auto)prepareAuto();else{clearTimeout(timer);stopStream();}schedule();});$('sound').addEventListener('change',()=>{settings.sound=$('sound').checked;if(settings.sound)unlockAudio();save();updateAlertState();});
 $('notify').addEventListener('click',enableAlerts);
 $('test-alert').addEventListener('click',async()=>{await enableAlerts();tone();toast('Kiểm tra cảnh báo thành công','Đây là thông báo thử. Âm thanh sẽ phát nếu thiết bị đã cho phép.');const sent=await systemNotify('RSI Radar · thông báo thử','Thông báo trên thiết bị đã hoạt động.');if(!sent)$('alert-status').textContent+=' Thông báo trong trang hoạt động; thông báo hệ thống chưa được gửi.';});
 $('clear-history').addEventListener('click',()=>{if(confirm('Xóa lịch sử đã lưu trên thiết bị này?')){history=[];save();render();}});
 function clock(){if(!settings.auto){$('countdown').textContent='Tạm dừng';$('next-time').textContent='Bạn vẫn có thể quét thủ công';return;}if(!synced){$('countdown').textContent='—:—';return;}const now=Date.now()+serverOffset,t=nextScanAt(now,settings.interval),left=Math.max(0,Math.ceil((t-now)/1000));$('countdown').textContent=left>=3600?`${Math.floor(left/3600)}:${String(Math.floor(left%3600/60)).padStart(2,'0')}:${String(left%60).padStart(2,'0')}`:`${String(Math.floor(left/60)).padStart(2,'0')}:${String(left%60).padStart(2,'0')}`;$('next-time').textContent=busy?'Đang quét nến đã đóng':formatTime(t);}
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.auto&&!busy)scan('auto');});window.addEventListener('online',()=>{if(settings.auto)scan('auto');});window.addEventListener('pagehide',()=>{clearTimeout(timer);stopStream();});window.addEventListener('pageshow',e=>{if(e.persisted&&settings.auto&&!busy)scan('auto');});
-fillForm();render();updateAlertState();ensureStream();setInterval(clock,1000);scan('initial');
+async function prepareAuto(){if(!settings.auto)return;ensureStream();try{await syncClock();schedule();}catch{streamState='Bybit chưa đồng bộ giờ; đang thử lại';updateAlertState();clearTimeout(timer);timer=setTimeout(prepareAuto,30000);}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.auto){ensureStream();}});window.addEventListener('online',()=>{if(settings.auto){ensureStream();prepareAuto();}});window.addEventListener('pagehide',()=>{clearTimeout(timer);stopStream();});window.addEventListener('pageshow',e=>{if(e.persisted&&settings.auto){prepareAuto();}});
+fillForm();render();updateAlertState();if(settings.auto)prepareAuto();else ensureStream();setInterval(clock,1000);

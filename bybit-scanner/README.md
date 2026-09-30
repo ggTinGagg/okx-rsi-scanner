@@ -12,7 +12,7 @@ Web tĩnh tiếng Việt cho GitHub Pages, không cần backend hay API key tron
 - Quá bán đối xứng: đã có RSI ≥ mốc nạp quá bán, lần đầu prev RSI ≥ ngưỡng và current RSI < ngưỡng.
 - Danh sách hiện tại chỉ nhận tín hiệu trên **nến vừa đóng**, không liệt kê tất cả mã đang nằm ngoài ngưỡng. Mở trang giữa nến: quét nến gần nhất đã đóng. Không thông báo lại một sự kiện đã lưu, không hồi cứu tất cả tín hiệu trong quá khứ.
 - SL% = lớn nhất của |Close−Open| trong10 nến bao gồm nến tín hiệu / Close tín hiệu ×100. Đòn bẩy =10/SL%, không làm tròn trước khi lọc. Trần mặc định30×, có thể chọn số khác hoặc bỏ lọc. Đây là giá trị công thức, không phải xác nhận giới hạn hợp đồng hay mức đòn bẩy sàn cho phép.
-- Tự quét sau mốc đóng nến khoảng2 giây, đồng bộ giờ Bybit. Chờ và thử lại khi Bybit chưa trả nến vừa đóng. 5 tác vụ song song, khoảng cách yêu cầu120ms. Có nút quét tay, tiến độ, lỗi từng mã.
+- Khi mở web chỉ đồng bộ giờ và kết nối stream, không quét thị trường. Bật tự quét để quét từ mốc đóng nến kế tiếp (khoảng2 giây sau, đồng bộ giờ Bybit), hoặc bấm Quét ngay. Không quét bù khi quay lại tab/mạng; mốc đã lỡ sẽ được bỏ qua. Khi tab nền/thiết bị bị tạm dừng, có thể trễ hoặc bỏ lỡ lượt quét; lúc quay lại sẽ đợi mốc kế tiếp hoặc bạn bấm Quét ngay. Chờ và thử lại khi Bybit chưa trả nến vừa đóng. 5 tác vụ song song, khoảng cách yêu cầu120ms. Có nút quét tay, tiến độ, lỗi từng mã.
 - Lịch sử lưu localStorage riêng từng thiết bị (1.000 sự kiện, hiển thị200 gần nhất); không đồng bộ qua tài khoản.
 - Toast + âm thanh ba nốt, nút bật và kiểm tra cảnh báo. Notification hệ thống được dùng khi trình duyệt cho phép; serviceworker chỉ phục vụ notification, không lưu cache giá.
 

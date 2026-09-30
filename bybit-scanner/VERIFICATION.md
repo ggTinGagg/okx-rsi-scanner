@@ -8,4 +8,4 @@
 - Bybit live từ môi trường kiểm tra: endpoint api.bybit.com trả HTML Site Unavailable, api.bytick.com trả403. Chưa xác nhận CORS/live trên mạng thiết bị người dùng. Trang không dùng dữ liệu giả khi lỗi.
 - Đích triển khai: ggTinGagg/okx-rsi-scanner, main, thư mục bybit-scanner. Giữ nguyên các file OKX hiện có. Trạng thái build và URL cần kiểm tra sau commit.
 
-- Kiểm tra tích hợp mở rộng: mô phỏng tab hidden và timer không kích hoạt; sự kiện WebSocket khởi động lượt quét nến mới, gửi notification, bỏ sự kiện trùng/sai topic và đóng stream khi tắt tự quét: đạt. Đây là kiểm tra mô phỏng, chưa xác nhận tab nền trên thiết bị người dùng.
+- Kiểm tra tích hợp mở rộng: lúc mở với tự quét tắt không gọi API thị trường; quét tay hoạt động; nến WebSocket xác nhận đóng gọi một lượt quét nền, gửi notification, bỏ sự kiện lặp/sai topic và đóng stream khi tắt tự quét: đạt. Các hành vi này được mô phỏng trong Node, chưa xác nhận vận hành tab nền trên thiết bị người dùng.

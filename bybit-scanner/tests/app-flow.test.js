@@ -30,7 +30,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  return {ok:true,status:200,json:async()=>({retCode:0,time:now,result})};};
  const wait=ms=>new Promise(r=>realSetTimeout(r,ms));
  async function completed(){for(let i=0;i<500;i++){if(!elements.get('scan').disabled&&elements.get('scan-status').textContent.includes('Hoàn tất'))return;await wait(50);}throw new Error('Scan timed out');}
- await import('../app.js');await completed();
+ await import('../app.js');assert.equal(requests,0,'opening with auto scan off must not call market APIs');await elements.get('settings').emit('submit');await completed();
  assert.equal(elements.get('signal-count').textContent,'2');assert.equal(elements.get('history-count').textContent,'2');assert.equal(elements.get('over-count').textContent,'1');assert.equal(elements.get('under-count').textContent,'1');assert.ok(!elements.get('signals').textContent.includes('ETHUSDT'));
  await elements.get('settings').emit('submit');await completed();assert.equal(elements.get('history-count').textContent,'2');
  elements.get('filterLeverage').checked=false;await elements.get('filterLeverage').emit('change');await elements.get('settings').emit('submit');await completed();assert.equal(elements.get('signal-count').textContent,'3');assert.equal(elements.get('history-count').textContent,'3');
@@ -40,6 +40,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  class Socket{static instances=[];readyState=0;sent=[];constructor(url){this.url=url;Socket.instances.push(this);}send(data){this.sent.push(JSON.parse(data));}close(){this.readyState=3;this.onclose?.();}}
  globalThis.WebSocket=Socket;
  elements.get('auto').checked=true;await elements.get('auto').emit('change');
+ for(let i=0;i<50&&!Socket.instances.length;i++)await wait(20);
  const ws=Socket.instances.at(-1);assert.ok(ws.url.endsWith('/v5/public/linear'));ws.readyState=1;ws.onopen();
  assert.deepEqual(ws.sent[0].args,['kline.5.BTCUSDT']);
  ws.onmessage({data:JSON.stringify({op:'subscribe',success:true})});
@@ -47,13 +48,14 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  const realNow=Date.now;document.visibilityState='hidden';
  const before=requests;
  try{
-  now+=300000;Date.now=()=>realNow()+300000;
+  now+=593000;Date.now=()=>realNow()+593000;
   ws.onmessage({data:'invalid JSON'});assert.equal(requests,before);
   ws.onmessage({data:JSON.stringify({topic:'kline.15.BTCUSDT',data:[]})});assert.equal(requests,before);
-  ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{confirm:true}]})});
+  const closedStart=Math.floor((now-300000)/300000)*300000;
+  ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{start:closedStart,confirm:true}]})});
   assert.equal(elements.get('scan').disabled,true);await completed();assert.ok(requests>before);
   assert.ok(notificationCalls>=2,'hidden scan sends system notification');
-  const after=requests;ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{confirm:true}]})});assert.equal(requests,after,'repeat message does not repeat scan');
+  const after=requests;ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{start:closedStart,confirm:true}]})});assert.equal(requests,after,'repeat message does not repeat scan');
   elements.get('auto').checked=false;await elements.get('auto').emit('change');assert.equal(ws.readyState,3);
  }finally{Date.now=realNow;document.visibilityState='visible';}
  const saved=JSON.parse(stored.get('bybit-rsi-radar-v1'));assert.ok(saved.history.length>=3);assert.ok(requests>=150);assert.equal(saved.settings.upper,80);
