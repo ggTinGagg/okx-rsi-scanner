@@ -37,6 +37,14 @@ URL: https://ggTinGagg.github.io/okx-rsi-scanner/bybit-scanner/
 
 Chạy test từ thư mục `bybit-scanner`: `npm test`. Cập nhật file trong thư mục này rồi commit lên main để Pages triển khai lại. Không cần thêm workflow Pages riêng.
 
+## Quét khi chuyển tab
+
+Bản cập nhật dùng một kết nối WebSocket public linear Bybit, đăng ký kline BTC theo khung đã chọn để nhận sự kiện mạng và kiểm tra mốc nến đóng của toàn thị trường. Mỗi lượt quét vẫn chọn và phân tích Top 50 qua REST. Lịch timer sau đóng nến 2 giây vẫn là dự phòng. Stream gửi ping mỗi 20 giây, tự kết nối lại và dừng khi tắt tự quét/đóng trang. Trạng thái kết nối được hiển thị ở “Quét nền”.
+
+WebSocket giúp giảm phụ thuộc vào timer bị trì hoãn ở tab nền; không bảo đảm chạy khi trình duyệt đóng băng/loại bỏ tab, thiết bị ngủ hoặc mất mạng. Stream kline có chu kỳ đẩy 1–60 giây nên cũng không bảo đảm đúng giây. Khi quay lại trang, web quét nến mới nhất, không phục hồi tất cả nến đã bỏ lỡ.
+
+Nếu dùng Edge: Settings → System and performance → Performance → Always keep these sites active, thêm URL trang scanner. Bật cảnh báo và cho phép notification hệ thống để nhận thông báo ngoài trang; toast trong web sẽ không nhìn thấy khi ở tab khác.
+
 ## Cảnh báo và giới hạn thực tế
 
 Lần đầu bấm **Bật cảnh báo** hoặc **Kiểm tra thông báo**, cho phép notification nếu muốn. Trình duyệt cần thao tác người dùng để phát âm thanh. Nếu notification hệ thống không được hỗ trợ, toast vẫn hoạt động. Khi điện thoại khóa màn hình/tab bị đóng băng thì quét có thể dừng; khi quay lại web, nó tự quét lại. Đây không phải background push24/24. Safari iOS có điều kiện riêng cho notification; cài thành ứng dụng web nếu trình duyệt yêu cầu. Không thể bảo đảm notification trên mọi thiết bị.

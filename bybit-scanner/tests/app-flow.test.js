@@ -18,7 +18,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  const notifications={async showNotification(){notificationCalls++;}};Object.defineProperty(globalThis,'navigator',{value:{serviceWorker:{register:async()=>notifications,ready:Promise.resolve(notifications)}},configurable:true});
  class Audio{state='running';currentTime=0;destination={};async resume(){}createOscillator(){return {frequency:{},connect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}}window.AudioContext=Audio;
  const realSetTimeout=globalThis.setTimeout;globalThis.setInterval=()=>0;globalThis.setTimeout=(f,t)=>{const handle=realSetTimeout(f,t);handle.unref?.();return handle;};
- const now=Math.floor(Date.now()/300000)*300000+10000;
+ let now=Math.floor(Date.now()/300000)*300000+10000;
  const symbol=i=>['BTCUSDT','ETHUSDT','SOLUSDT'][i]||`TEST${i}USDT`;
  let requests=0;
  globalThis.fetch=async url=>{requests++;const u=new URL(url);let result={};
@@ -36,5 +36,25 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  elements.get('filterLeverage').checked=false;await elements.get('filterLeverage').emit('change');await elements.get('settings').emit('submit');await completed();assert.equal(elements.get('signal-count').textContent,'3');assert.equal(elements.get('history-count').textContent,'3');
  await presets[1].emit('click');assert.equal(Number(elements.get('resetUpper').value),70);assert.equal(Number(elements.get('resetLower').value),30);
  await elements.get('test-alert').emit('click');assert.ok(notificationCalls>=1);assert.ok(elements.get('toasts').textContent.includes('Kiểm tra cảnh báo thành công'));
- const saved=JSON.parse(stored.get('bybit-rsi-radar-v1'));assert.equal(saved.history.length,3);assert.ok(requests>=150);assert.equal(saved.settings.upper,80);
+ // Simulate background timers not firing: only an incoming WebSocket event wakes scanning.
+ class Socket{static instances=[];readyState=0;sent=[];constructor(url){this.url=url;Socket.instances.push(this);}send(data){this.sent.push(JSON.parse(data));}close(){this.readyState=3;this.onclose?.();}}
+ globalThis.WebSocket=Socket;
+ elements.get('auto').checked=true;await elements.get('auto').emit('change');
+ const ws=Socket.instances.at(-1);assert.ok(ws.url.endsWith('/v5/public/linear'));ws.readyState=1;ws.onopen();
+ assert.deepEqual(ws.sent[0].args,['kline.5.BTCUSDT']);
+ ws.onmessage({data:JSON.stringify({op:'subscribe',success:true})});
+ assert.ok(elements.get('alert-status').textContent.includes('Quét nền: đã kết nối'));
+ const realNow=Date.now;document.visibilityState='hidden';
+ const before=requests;
+ try{
+  now+=300000;Date.now=()=>realNow()+300000;
+  ws.onmessage({data:'invalid JSON'});assert.equal(requests,before);
+  ws.onmessage({data:JSON.stringify({topic:'kline.15.BTCUSDT',data:[]})});assert.equal(requests,before);
+  ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{confirm:true}]})});
+  assert.equal(elements.get('scan').disabled,true);await completed();assert.ok(requests>before);
+  assert.ok(notificationCalls>=2,'hidden scan sends system notification');
+  const after=requests;ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{confirm:true}]})});assert.equal(requests,after,'repeat message does not repeat scan');
+  elements.get('auto').checked=false;await elements.get('auto').emit('change');assert.equal(ws.readyState,3);
+ }finally{Date.now=realNow;document.visibilityState='visible';}
+ const saved=JSON.parse(stored.get('bybit-rsi-radar-v1'));assert.ok(saved.history.length>=3);assert.ok(requests>=150);assert.equal(saved.settings.upper,80);
 });

@@ -7,3 +7,5 @@
 - Trình duyệt thật/ảnh desktop và mobile: chưa xác nhận, do Chromium không tải được và preview browser không truy cập địa chỉ local.
 - Bybit live từ môi trường kiểm tra: endpoint api.bybit.com trả HTML Site Unavailable, api.bytick.com trả403. Chưa xác nhận CORS/live trên mạng thiết bị người dùng. Trang không dùng dữ liệu giả khi lỗi.
 - Đích triển khai: ggTinGagg/okx-rsi-scanner, main, thư mục bybit-scanner. Giữ nguyên các file OKX hiện có. Trạng thái build và URL cần kiểm tra sau commit.
+
+- Kiểm tra tích hợp mở rộng: mô phỏng tab hidden và timer không kích hoạt; sự kiện WebSocket khởi động lượt quét nến mới, gửi notification, bỏ sự kiện trùng/sai topic và đóng stream khi tắt tự quét: đạt. Đây là kiểm tra mô phỏng, chưa xác nhận tab nền trên thiết bị người dùng.
