@@ -1,0 +1,9 @@
+{
+  "name": "bybit-rsi-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/core.test.js && node tests/app-flow.test.js"
+  }
+}
