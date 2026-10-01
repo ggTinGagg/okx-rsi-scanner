@@ -17,7 +17,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  let notificationCalls=0;class Notify{static permission='default';static async requestPermission(){Notify.permission='granted';return 'granted';}constructor(){notificationCalls++;}close(){}}globalThis.Notification=Notify;window.Notification=Notify;
  const notifications={async showNotification(){notificationCalls++;}};Object.defineProperty(globalThis,'navigator',{value:{serviceWorker:{register:async()=>notifications,ready:Promise.resolve(notifications)}},configurable:true});
  class Audio{state='running';currentTime=0;destination={};async resume(){}createOscillator(){return {frequency:{},connect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}}window.AudioContext=Audio;
- const realSetTimeout=globalThis.setTimeout;globalThis.setInterval=()=>0;globalThis.setTimeout=(f,t)=>{const handle=realSetTimeout(f,t);handle.unref?.();return handle;};
+ const realSetTimeout=globalThis.setTimeout;globalThis.setInterval=()=>0;globalThis.setTimeout=(f,t)=>{if(document.visibilityState==='hidden')return 0;const handle=realSetTimeout(f,t);handle.unref?.();return handle;};
  let now=Math.floor(Date.now()/300000)*300000+10000;
  const symbol=i=>['BTCUSDT','ETHUSDT','SOLUSDT'][i]||`TEST${i}USDT`;
  let requests=0;
@@ -46,7 +46,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
  ws.onmessage({data:JSON.stringify({op:'subscribe',success:true})});
  assert.ok(elements.get('alert-status').textContent.includes('Quét nền: đã kết nối'));
  const realNow=Date.now;document.visibilityState='hidden';
- const before=requests;
+ const before=requests,beforeNotifications=notificationCalls;
  try{
   now+=593000;Date.now=()=>realNow()+593000;
   ws.onmessage({data:'invalid JSON'});assert.equal(requests,before);
@@ -54,7 +54,7 @@ test('scanner application flow: 50 contracts, filtering, persistence, dedupe and
   const closedStart=Math.floor((now-300000)/300000)*300000;
   ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{start:closedStart,confirm:true}]})});
   assert.equal(elements.get('scan').disabled,true);await completed();assert.ok(requests>before);
-  assert.ok(notificationCalls>=2,'hidden scan sends system notification');
+  assert.ok(notificationCalls>beforeNotifications,'hidden scan sends a NEW system notification while all page timers are stalled');
   const after=requests;ws.onmessage({data:JSON.stringify({topic:'kline.5.BTCUSDT',data:[{start:closedStart,confirm:true}]})});assert.equal(requests,after,'repeat message does not repeat scan');
   elements.get('auto').checked=false;await elements.get('auto').emit('change');assert.equal(ws.readyState,3);
  }finally{Date.now=realNow;document.visibilityState='visible';}
