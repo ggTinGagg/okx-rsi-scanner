@@ -6,7 +6,7 @@ const formatTime=(n,full=false)=>new Date(n).toLocaleString('vi-VN',full?{day:'2
 const evenLeverage=n=>Math.max(2,Math.round(n/2)*2);
 const price=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:n>=100?2:n>=1?4:8});
 let stream=null,streamInterval='',streamPing=null,streamRetry=null,streamFailures=0,streamState='chưa kết nối',lastAutoClosed=null,pendingStreamClose=null,streamCloseTimer=null,lastStreamAttempt=0,pageOpenedAt=Date.now(),scheduledCloseAt=null;
-let settings={...DEFAULTS},history=[],rows=[],busy=false,serverOffset=0,synced=false,timer=null,lastSettings='',audio=null,instruments=[],instrumentTime=0,requestTurn=Promise.resolve();
+let settings={...DEFAULTS},history=[],rows=[],busy=false,serverOffset=0,synced=false,timer=null,lastSettings='',audio=null,instruments=[],instrumentTime=0;
 try{const raw=JSON.parse(localStorage.getItem(STORE)||'{}');settings=validateSettings({...DEFAULTS,...raw.settings,period:14});history=(raw.history||[]).filter(x=>x&&typeof x.symbol==='string'&&Number.isFinite(x.rsi)&&Number.isFinite(x.closeTime)&&typeof x.id==='string').slice(0,1000);}catch{settings={...DEFAULTS};}
 const seen=new Set(history.map(x=>x.id));
 function save(){try{localStorage.setItem(STORE,JSON.stringify({settings,history}));}catch{$('alert-status').textContent='Bộ nhớ thiết bị đã đầy; lịch sử phiên này vẫn hiển thị nhưng có thể không lưu được.';}}
@@ -19,14 +19,15 @@ function fmtInterval(i){return i==='D'?'D1':Number(i)<60?'M'+i:'H'+Number(i)/60;
 function makeRow(r,hist=false){const tr=document.createElement('tr');const values=[r.symbol,r.rsi.toFixed(2),evenLeverage(r.leverage)+'×',r.slPct.toFixed(3)+'%',price(r.close),r.kind==='overbought'?'Quá mua':'Quá bán',formatTime(r.closeTime)];for(let i=0;i<values.length;i++){const td=document.createElement('td');if(i===0){const strong=document.createElement('strong');strong.textContent=values[i];td.append(strong);const small=document.createElement('small');small.textContent=hist?`${fmtInterval(r.interval)} · ${r.upper}/${r.lower}`:`#${r.rank} · Top 50`;td.append(small);}else if(i===5){const tag=document.createElement('span');tag.className='tag '+(r.kind==='overbought'?'buy':'sell');tag.textContent=values[i];td.append(tag);}else{td.textContent=values[i];if(i===1)td.className=r.kind==='overbought'?'rsi-high numeric':'rsi-low numeric';if(i===2){td.className='lev numeric';td.title=`Đòn bẩy công thức: ${r.leverage.toFixed(4)}×; hiển thị số chẵn gần nhất (tối thiểu 2×). Bộ lọc dùng giá trị chưa làm tròn.`;}if(i===3||i===4)td.className='numeric';}tr.append(td);}return tr;}
 function render(){$('signals').replaceChildren(...rows.map(x=>makeRow(x)));$('empty').hidden=rows.length>0;$('signal-count').textContent=rows.length;$('over-count').textContent=rows.filter(x=>x.kind==='overbought').length;$('under-count').textContent=rows.filter(x=>x.kind==='oversold').length;$('history').replaceChildren(...history.slice(0,200).map(x=>makeRow(x,true)));$('history-count').textContent=history.length;$('history-empty').hidden=history.length>0;}
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-function pace(){const next=requestTurn.then(()=>wait(120));requestTurn=next.catch(()=>{});return next;}
 const configured=String(window.SCANNER_CONFIG?.apiBase||'').trim();
 const hosts=configured?[configured.replace(/\/$/,'')]:['https://api.bybit.com','https://api.bytick.com'];
 async function api(path,params={}){
  let last;
  for(const host of hosts){
   for(let attempt=0;attempt<2;attempt++){
-   await pace();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
+   // Five scan workers bound concurrency; do not queue each fetch behind a timer.
+   // Hidden-tab timer throttling must not block normal successful requests.
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
    try{const response=await fetch(host+path+'?'+new URLSearchParams(params),{signal:controller.signal,credentials:'omit',cache:'no-store'});if(response.status===429){await wait(1000*(attempt+1));continue;}if(!response.ok)throw new Error('HTTP '+response.status);const data=await response.json();if(data.retCode===10006){await wait(1000*(attempt+1));continue;}if(data.retCode!==0)throw new Error(data.retMsg||'Bybit trả lỗi dữ liệu');return data;
    }catch(e){last=e;if(attempt===0)await wait(400);}finally{clearTimeout(timeout);}
   }
