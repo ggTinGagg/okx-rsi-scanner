@@ -1,8 +1,11 @@
 import {DEFAULTS,normalizeCandles,analyzeCandles,latestClosedStart,nextScanAt} from './core.js';
 import {amounts,parameters} from './sizing.js';
+import {setupPWA,alertSignals} from './pwa.js';
 const $=id=>document.getElementById(id),MS=300000,KEY='okx-dca-mobile-equity-v1';
-let rows=[],busy=false,offset=0,timer=null,lastSlot=null,audio=null,queue=Promise.resolve();
+let rows=[],busy=false,offset=0,timer=null,autoSlot=null,audio=null,queue=Promise.resolve();
 try{$('equity').value=localStorage.getItem(KEY)||'';}catch{}
+const seenKey='okx-dca-seen-v2';
+let seen=new Set();try{seen=new Set(JSON.parse(localStorage.getItem(seenKey)||'[]'));}catch{}
 const now=()=>Date.now()+offset,wait=ms=>new Promise(r=>setTimeout(r,ms));
 function failure(message){$('error').hidden=!message;$('error').textContent=message;}
 async function api(path,params={}){
@@ -28,34 +31,47 @@ function render(){
 }
 function sound(){try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume().catch(()=>{});}catch{}}
 function beep(){if(!audio||audio.state!=='running')return;const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=880;g.gain.value=.12;o.connect(g);g.connect(audio.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.3);o.stop(audio.currentTime+.3);}
-function schedule(){clearTimeout(timer);if(!document.hidden&&Number($('equity').value)>0)timer=setTimeout(()=>scan(),Math.max(500,nextScanAt(now(),'5')-now()));}
+function schedule(){
+ clearTimeout(timer);
+ if(document.hidden||navigator.onLine===false||busy||!(Number($('equity').value)>0))return;
+ timer=setTimeout(()=>{
+  const slot=latestClosedStart(now(),'5')+MS;
+  if(autoSlot===slot){schedule();return;}
+  autoSlot=slot;scan();
+ },Math.max(500,nextScanAt(now(),'5')-now()));
+}
 async function scan(){
- if(busy)return;try{amounts(Number($('equity').value));}catch(e){failure(e.message);return;}
- busy=true;$('scan').disabled=true;$('scan').textContent='Đang quét';$('progress').hidden=false;$('progress').value=0;failure('');let done=0,errors=[],completed=0;
+ if(busy)return;if(navigator.onLine===false){failure('Đang mất mạng. Kết nối lại rồi bấm Quét ngay hoặc đợi M5 đóng.');return;}try{amounts(Number($('equity').value));}catch(e){failure(e.message);return;}
+ clearTimeout(timer);busy=true;$('scan').disabled=true;$('scan').textContent='Đang quét';$('progress').hidden=false;$('progress').value=0;failure('');let done=0,errors=[],completed=0;
  try{
   $('status').textContent='Đang lấy giờ OKX và Top 50…';const sent=Date.now();const clock=await api('public/time');const remote=Number(clock[0]?.ts);if(!Number.isFinite(remote))throw Error('Không đọc được giờ OKX.');offset=remote-(sent+Date.now())/2;
   const expected=latestClosedStart(now(),'5'),slot=expected+MS;
   const [instruments,tickers]=await Promise.all([api('public/instruments',{instType:'SWAP'}),api('market/tickers',{instType:'SWAP'})]);
   const info=new Map(instruments.filter(i=>i.state==='live'&&i.ctType==='linear'&&i.settleCcy==='USDT'&&i.instId.endsWith('-USDT-SWAP')).map(i=>[i.instId,i]));
   const top=tickers.filter(t=>info.has(t.instId)&&Number(t.last)>0&&Number(t.volCcy24h)>0).sort((a,b)=>Number(b.volCcy24h)*Number(b.last)-Number(a.volCcy24h)*Number(a.last)||a.instId.localeCompare(b.instId)).slice(0,50);
-  if(!top.length)throw Error('Không đọc được danh sách Top 50.');rows=[];render();let cursor=0,newSignals=0;
+  if(!top.length)throw Error('Không đọc được danh sách Top 50.');rows=[];render();let cursor=0;
   async function worker(){while(cursor<top.length){const rank=cursor++,symbol=top[rank].instId;try{
     let raw=await api('market/candles',{instId:symbol,bar:'5m',limit:'300'});
     if(raw.length>=300){const oldest=Math.min(...raw.map(r=>Number(r[0])));raw.push(...await api('market/candles',{instId:symbol,bar:'5m',limit:'200',after:String(oldest)}));}
     const candles=normalizeCandles(raw.filter(r=>r[8]==='1'),now(),'5').filter(r=>r.time<=expected);
     const signal=analyzeCandles(candles,DEFAULTS,expected);completed++;
-    if(signal){const p=parameters(signal,info.get(symbol));if(p){rows.push({...signal,...p,symbol,rank});rows.sort((a,b)=>a.rank-b.rank);render();if(lastSlot!==slot)newSignals++;}}
+    if(signal){const p=parameters(signal,info.get(symbol));if(p){rows.push({...signal,...p,symbol,rank});rows.sort((a,b)=>a.rank-b.rank);render();}}
    }catch(e){errors.push(symbol+': '+e.message);}finally{done++;$('progress').value=done;$('status').textContent=`Đã quét ${done}/${top.length} · ${rows.length} tín hiệu`;}}
   }await Promise.all(Array.from({length:4},worker));
-  if(!completed)throw Error('Không quét được coin nào. '+(errors[0]||''));if(newSignals)beep();lastSlot=slot;
+  if(!completed)throw Error('Không quét được coin nào. '+(errors[0]||''));const fresh=rows.filter(r=>!seen.has([r.symbol,r.candleTime,r.kind].join('|')));
+  for(const r of fresh)seen.add([r.symbol,r.candleTime,r.kind].join('|'));
+  seen=new Set([...seen].slice(-300));try{localStorage.setItem(seenKey,JSON.stringify([...seen]));}catch{}
+  await alertSignals(fresh,beep);
   $('status').textContent=`${rows.length} tín hiệu · ${completed}/${top.length} mã · nến ${new Date(slot).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'})}`;
   if(errors.length)failure(`${errors.length} mã chưa quét được (thiếu lịch sử hoặc lỗi dữ liệu). ${errors.slice(0,2).join(' · ')}`);
  }catch(e){failure(e.message+' Nếu trình duyệt chặn kết nối OKX, trang không có dữ liệu để tính.');$('status').textContent='Quét chưa hoàn tất';}
- finally{busy=false;$('scan').disabled=false;$('scan').textContent='Quét RSI';$('progress').hidden=true;render();schedule();}
+ finally{busy=false;$('scan').disabled=false;$('scan').textContent='Quét ngay';$('progress').hidden=true;render();schedule();}
 }
 $('form').addEventListener('submit',e=>{e.preventDefault();sound();scan();});
-$('equity').addEventListener('input',()=>{try{localStorage.setItem(KEY,$('equity').value);}catch{}render();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(Number($('equity').value)>0)scan();});
-window.addEventListener('online',()=>{if(Number($('equity').value)>0)scan();});
+$('equity').addEventListener('input',()=>{try{localStorage.setItem(KEY,$('equity').value);}catch{}render();schedule();});
+document.addEventListener('visibilitychange',schedule);
+window.addEventListener('online',schedule);
+window.addEventListener('offline',()=>clearTimeout(timer));
 setInterval(()=>{const left=Math.max(0,Math.ceil((nextScanAt(now(),'5')-now())/1000));$('countdown').textContent=Number($('equity').value)>0?`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`:'';render();},1000);
-render();if(Number($('equity').value)>0)scan();
+setupPWA(sound);render();schedule();
+

@@ -55,3 +55,4 @@ export function topContracts(tickers,instruments,n=50){
 }
 export function settingsKey(s){return [s.interval,s.period,s.upper,s.lower,s.resetUpper,s.resetLower].join(':');}
 export function eventId(symbol,result,s){return [symbol,result.candleTime,result.kind,settingsKey(s)].join('|');}
+
